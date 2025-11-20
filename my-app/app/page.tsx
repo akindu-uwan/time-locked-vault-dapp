@@ -1,11 +1,18 @@
 "use client";
 
 import { useEffect, useState, useContext } from "react";
-//import { getEthereum, getVaultContract, VaultStruct } from "app/lib/contract";
-import { encryptFile, decryptToBlob, generateRandomPassword } from "./lib/encryption";
-import { uploadEncryptedString, downloadEncryptedString } from "./lib/ipfs";
+import {
+  encryptFile,
+  decryptToBlob,
+  generateRandomPassword,
+} from "./lib/encryption";
+import {
+  uploadEncryptedString,
+  downloadEncryptedString,
+} from "./lib/ipfs";
 import { UserContext } from "@/app/context/UserContext";
 
+//TokenModule#TimeLockedVault - 0x3C0Dc4Cb1975aAD3c3752185f7387301D93fc6Bb
 
 type SimpleVault = {
   index: number;
@@ -22,27 +29,35 @@ export type VaultStruct = {
   unlocked: boolean;
 };
 
-
 export default function HomePage() {
-  const [account, setAccount] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [durationMonths, setDurationMonths] = useState<number>(3);
   const [vaults, setVaults] = useState<SimpleVault[]>([]);
-  const [isConnecting, setIsConnecting] = useState(false);
   const [isLocking, setIsLocking] = useState(false);
   const [isLoadingVaults, setIsLoadingVaults] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
 
   const web3 = useContext(UserContext);
+  const account = web3.address;
+  const isConnecting = !!web3.connecting;
 
-  
+  const nowTs = Math.floor(Date.now() / 1000);
 
   async function loadVaults(userAddress?: string) {
     try {
       setIsLoadingVaults(true);
+
       const addr = userAddress ?? account;
       if (!addr) return;
-      const rawVaults = (await web3.contractWrite.getVaults(addr)) as VaultStruct[];
+
+      if (!web3.contractWrite) {
+        console.warn("contractWrite not ready yet, cannot load vaults");
+        return;
+      }
+
+      const rawVaults = (await web3.contractWrite.getVaults(
+        addr
+      )) as VaultStruct[];
 
       const mapped: SimpleVault[] = rawVaults.map((v, idx) => ({
         index: idx,
@@ -64,8 +79,14 @@ export default function HomePage() {
       alert("Connect your wallet first.");
       return;
     }
+
     if (!file) {
       alert("Please select a file.");
+      return;
+    }
+
+    if (!web3.contractWrite) {
+      alert("Wallet / contract not ready yet.");
       return;
     }
 
@@ -73,32 +94,31 @@ export default function HomePage() {
       setStatus(null);
       setIsLocking(true);
 
-      // 1) Generate random password for this file
       const password = generateRandomPassword(32);
 
-      // 2) Encrypt file in browser
       setStatus("Encrypting file...");
       const encryptedString = await encryptFile(file, password);
 
-      // 3) Upload encrypted content to IPFS
       setStatus("Uploading encrypted file to IPFS...");
       const cid = await uploadEncryptedString(encryptedString, file.name);
 
-      // 4) Compute unlock time (approx months -> seconds)
       const now = Math.floor(Date.now() / 1000);
       const months = durationMonths;
       const secondsPerMonth = 30 * 24 * 60 * 60; // ~30 days
       const unlockTime = now + months * secondsPerMonth;
 
-      // 5) Store IPFS hash + password in smart contract
       setStatus("Creating vault on-chain...");
-    
-      const tx = await web3.contractWrite.createVault(cid, password, unlockTime);
+
+      const tx = await web3.contractWrite.createVault(
+        cid,
+        password,
+        unlockTime
+      );
       await tx.wait();
 
       setStatus("Vault created successfully!");
       setFile(null);
-      // Reload list
+
       await loadVaults(account);
     } catch (err: any) {
       console.error(err);
@@ -110,26 +130,19 @@ export default function HomePage() {
   }
 
   async function handleUnlock(vault: SimpleVault) {
+    if (!web3.contractWrite) {
+      alert("Wallet / contract not ready yet.");
+      return;
+    }
+
     try {
       setStatus("Unlocking via smart contract...");
+
+      const password: string =
+        await web3.contractWrite.unlockVault.staticCall(vault.index);
+
       const tx = await web3.contractWrite.unlockVault(vault.index);
-      const receipt = await tx.wait();
-
-      // The function also returns the key, but easiest is to read from tx result:
-      const password: string = receipt.logs && receipt.logs.length === 0
-        ? await web3.contractWrite.unlockVault.staticCall(vault.index) // fallback
-        : (await web3.contractWrite.unlockVault(vault.index)); // or you can grab from event
-
-      // However, to avoid a second tx, we can use the return value of tx:
-      // In ethers v6, can just read from tx result:
-      // const { result } = await contract.unlockVault(vault.index);
-
-      // For simplicity (and to avoid ethers version differences), let's fetch again with a call:
-      const passwordCall: string = await web3.contractWrite.unlockVault.staticCall(
-        vault.index
-      );
-
-      const finalPassword = passwordCall || password;
+      await tx.wait();
 
       setStatus("Downloading encrypted file from IPFS...");
       const { encrypted, filename } = await downloadEncryptedString(
@@ -137,9 +150,8 @@ export default function HomePage() {
       );
 
       setStatus("Decrypting file...");
-      const blob = decryptToBlob(encrypted, finalPassword);
+      const blob = decryptToBlob(encrypted, password);
 
-      // Trigger browser download
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -150,7 +162,7 @@ export default function HomePage() {
       URL.revokeObjectURL(url);
 
       setStatus("File unlocked and downloaded!");
-      // Reload vaults so 'unlocked' flag updates
+
       await loadVaults(account ?? undefined);
     } catch (err: any) {
       console.error(err);
@@ -159,7 +171,12 @@ export default function HomePage() {
     }
   }
 
-  const nowTs = Math.floor(Date.now() / 1000);
+  useEffect(() => {
+    if (account && web3.contractWrite) {
+      loadVaults(account);
+    }
+    
+  }, [account, web3.contractWrite]);
 
   return (
     <main className="space-y-8">
@@ -173,7 +190,6 @@ export default function HomePage() {
         </p>
       </header>
 
-      {/* Wallet */}
       <section className="bg-slate-900/60 border border-slate-800 rounded-2xl p-5 flex items-center justify-between gap-4">
         <div>
           <div className="text-sm text-slate-400">Wallet</div>
@@ -183,20 +199,24 @@ export default function HomePage() {
             </div>
           ) : (
             <div className="text-slate-400 text-sm">
-              Not connected. Connect your wallet to use the vault.
+              {isConnecting
+                ? "Connecting to wallet..."
+                : "Not connected. Please connect in MetaMask."}
             </div>
           )}
         </div>
         <button
-          //onClick={connectWallet}
-          disabled={isConnecting}
-          className="inline-flex items-center px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold text-sm disabled:opacity-60 disabled:cursor-not-allowed transition"
+          disabled={true}
+          className="inline-flex items-center px-4 py-2 rounded-xl bg-emerald-500 text-slate-950 font-semibold text-sm opacity-60 cursor-not-allowed"
         >
-          {isConnecting ? "Connecting..." : account ? "Reconnect" : "Connect"}
+          {isConnecting
+            ? "Connecting..."
+            : account
+            ? "Connected"
+            : "Awaiting connection"}
         </button>
       </section>
 
-      {/* Create Vault */}
       <section className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 space-y-4">
         <h2 className="text-xl font-semibold">Create new time-locked vault</h2>
 
@@ -241,7 +261,7 @@ export default function HomePage() {
 
           <button
             onClick={handleLock}
-            disabled={!account || !file || isLocking}
+            disabled={!account || !file || isLocking || !web3.contractWrite}
             className="mt-2 inline-flex items-center px-4 py-2 rounded-xl bg-indigo-500 hover:bg-indigo-400 text-sm font-semibold text-slate-950 disabled:opacity-60 disabled:cursor-not-allowed transition"
           >
             {isLocking ? "Locking..." : "Encrypt & Lock on-chain"}
@@ -253,7 +273,6 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Vault List */}
       <section className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-semibold">Your vaults</h2>
@@ -280,7 +299,8 @@ export default function HomePage() {
 
         <div className="space-y-3">
           {vaults.map((vault) => {
-            const isUnlockable = nowTs >= vault.unlockTime && !vault.unlocked;
+            const isUnlockable =
+              nowTs >= vault.unlockTime && !vault.unlocked;
             const unlockDate = new Date(
               vault.unlockTime * 1000
             ).toLocaleString();
@@ -322,7 +342,7 @@ export default function HomePage() {
                 <div className="flex items-center gap-2 justify-end">
                   <button
                     onClick={() => handleUnlock(vault)}
-                    disabled={!isUnlockable}
+                    disabled={!isUnlockable || !web3.contractWrite}
                     className="inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-500 text-slate-950 hover:bg-emerald-400 disabled:bg-slate-800 disabled:text-slate-500 disabled:cursor-not-allowed transition"
                   >
                     Unlock & Download

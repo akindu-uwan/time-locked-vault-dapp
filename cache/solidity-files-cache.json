@@ -6,7 +6,7 @@
       "contentHash": "e4f16bec86869a9b26d5bf4151594b05",
       "sourceName": "contracts/time-locked-vault.sol",
       "solcConfig": {
-        "version": "0.8.28",
+        "version": "0.8.20",
         "settings": {
           "evmVersion": "paris",
           "optimizer": {

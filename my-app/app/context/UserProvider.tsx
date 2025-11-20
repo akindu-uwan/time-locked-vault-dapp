@@ -20,7 +20,7 @@ export default function UserProvider({ children }: Props) {
     useEffect(() => {
         (async () => {
             const contractAbi = testlockedvaultABI;
-            const contractAddress = '0xd711770431952546A8cB8c15ddBC5b56cD4D64A8';
+            const contractAddress = '0x3C0Dc4Cb1975aAD3c3752185f7387301D93fc6Bb';
 
             try {
                 setConnecting(true);
