@@ -1,0 +1,24 @@
+{
+  "name": "time-locked-vault-dapp",
+  "version": "1.0.0",
+  "description": "",
+  "homepage": "https://github.com/akindu-uwan/time-locked-vault-dapp#readme",
+  "bugs": {
+    "url": "https://github.com/akindu-uwan/time-locked-vault-dapp/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/akindu-uwan/time-locked-vault-dapp.git"
+  },
+  "license": "ISC",
+  "author": "",
+  "type": "commonjs",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^6.1.1",
+    "hardhat": "^2.27.0"
+  }
+}
