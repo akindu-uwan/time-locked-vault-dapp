@@ -23,13 +23,12 @@ export async function connect() {
 
     await window.ethereum.request({
       method: 'wallet_switchEthereumChain',
-      params: [{ chainId: '0xaa36a7' }], // Sepolia chain ID
+      params: [{ chainId: '0xaa36a7' }],
     });
 
     const signer = await provider.getSigner();
     const address = await signer.getAddress();
 
-    // console.log("Connected:", address);
     return { provider, signer, address };
   } catch (err) {
     console.error("MetaMask connection failed:", err);

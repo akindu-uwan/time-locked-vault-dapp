@@ -1,4 +1,3 @@
-// lib/ipfs.ts
 const PINATA_JWT = process.env.NEXT_PUBLIC_PINATA_JWT!;
 const IPFS_GATEWAY =
   process.env.NEXT_PUBLIC_IPFS_GATEWAY || "https://gateway.pinata.cloud/ipfs/";
@@ -32,7 +31,6 @@ export async function uploadEncryptedString(
   }
 
   const json = await res.json();
-  // Pinata returns { IpfsHash, PinSize, Timestamp }
   return json.IpfsHash as string;
 }
 

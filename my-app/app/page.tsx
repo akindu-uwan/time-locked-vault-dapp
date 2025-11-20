@@ -182,7 +182,7 @@ export default function HomePage() {
     <main className="space-y-8">
       <header className="flex flex-col gap-2 mb-6">
         <h1 className="text-3xl font-bold tracking-tight">
-          ⏱️ Time-Locked Secure Vault
+          ⏱️ Time Capsule
         </h1>
         <p className="text-slate-300">
           Encrypt files in your browser, store them on IPFS, and lock the

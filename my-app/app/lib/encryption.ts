@@ -11,7 +11,6 @@ export function generateRandomPassword(length = 32): string {
   ) {
     window.crypto.getRandomValues(array);
   } else {
-    // Fallback (for SSR or non-browser env)
     for (let i = 0; i < length; i++) {
       array[i] = Math.floor(Math.random() * 256);
     }
